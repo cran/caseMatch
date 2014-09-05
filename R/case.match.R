@@ -300,7 +300,7 @@ case.match <- function(data, id.var, case.N=2,
     if(length(variances[variances==max(variances,na.rm=T)]) < number.of.matches.to.return){
       variances >= quantile(variances,probs=variance.tolerance)
       distances.sort.trim <- distances.sort[variances >= quantile(variances,probs=(1-variance.tolerance)),]
-      treat.variance <- variances[variances >= quantile(variances,probs=variance.tolerance)]
+      treat.variance <- variances[variances >= quantile(variances,probs=(1-variance.tolerance))]
     }
     distances.sort <- cbind(distances.sort.trim,treat.variance)
   }
