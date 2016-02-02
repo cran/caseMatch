@@ -1,1 +1,3 @@
 export(case.match)
+importFrom("stats", "cov", "mahalanobis", "na.omit", "quantile", "sd", "var")
+importFrom("utils", "combn", "head") 

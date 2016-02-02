@@ -7,10 +7,11 @@ Uses matching methods to select cases for qualitative analysis
 \usage{
 case.match(data, id.var, case.N = 2, distance = "mahalanobis", 
     design.type = "most similar", match.case = NULL, 
-    number.of.matches.to.return = 1, treatment.var = NULL, 
-    leaveout.vars = NULL, max.variance = FALSE, 
+    number.of.matches.to.return = 1, treatment.var = NULL,
+    outcome.var= NULL, leaveout.vars = NULL, 
+    max.variance = FALSE,  max.variance.outcome=FALSE,
     variance.tolerance = 0.1, max.spread = FALSE, 
-    varweights = NULL)
+     max.spread.outcome=FALSE, varweights = NULL)
 }
 \arguments{
   \item{data}{The original data.}
@@ -21,10 +22,13 @@ case.match(data, id.var, case.N = 2, distance = "mahalanobis",
   \item{match.case}{If specified, this is the value of \code{id.var} of a specific case to match.}
   \item{number.of.matches.to.return}{How many matches to return.}
   \item{treatment.var}{The name of the treatment variable, specified as a string.}
-  \item{leaveout.vars}{A vector of variablest to not include in the matching.}
+  \item{outcome.var}{The name of the outcome variable, specified as a string.}
+  \item{leaveout.vars}{A vector of variables to not include in the matching.}
   \item{max.variance}{Should the cases be selected to maximize variance on \code{treatment.var}?  If cases should be in opposite treatment conditions, specify \code{max.variance=TRUE}.}
+  \item{max.variance.outcome}{Should the cases be selected to maximize variance on \code{outcome.var}?  If cases should have opposite outcomes, specify \code{max.variance.outcome=TRUE}.}
   \item{variance.tolerance}{The proportion of cases to consider if \code{max.variance} is specified but there are too few cases that maximize the variance of \code{treatment.var}.}
   \item{max.spread}{Should the cases be selected to maximize "spread" on the treatment variable, meaning that cases are selected to be have evenly values from the min of \code{treatment.var} to the max?}
+  \item{max.spread.outcome}{Should the cases be selected to maximize "spread" on the outcome variable, meaning that cases are selected to be have evenly values from the min of \code{outcome.var} to the max?}
   \item{varweights}{An optional vector of variable weights.  It must line up with the columns of the data after \code{id.var} and \code{leaveout.vars} are removed.  Optionally, element names can be included for \code{varweights} --- if so, the function checks that the names are identical to (and line up with) the names of the matching variables.  It will throw an error if they do not.}
 }
 \details{

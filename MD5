@@ -1,7 +1,7 @@
-92b8884d6471d4329d807a4a91f2aa64 *DESCRIPTION
-15b5149f15176b94a0eb15b6efba8ee6 *NAMESPACE
-ff9bb6f53b781b455ddb26177feb1cb1 *R/case.match.R
+b2b65fd5cfa0145da491dc1f5c86031e *DESCRIPTION
+4a6e3ca664d73499fa1b7e54affc7c20 *NAMESPACE
+c3d26e8602d188e541787637e14599c5 *R/case.match.R
 ae61b16cf5feb095a50d3da1b7905e12 *data/EU.rda
 7d78f1e4200bd43c12f19f5c4be29aba *man/EU.Rd
-89c6847e2447d2e508f0a5dc01397870 *man/case.match.Rd
+09720900b6dcdd4de4a25060bf269cf7 *man/case.match.Rd
 6bc983cdecbcc59b3b018dcb44ef025f *man/caseMatch-package.Rd

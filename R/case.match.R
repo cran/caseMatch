@@ -2,20 +2,24 @@
 ## copied directly.  Then I added weights to do weighted mahalanobis
 ## matching.  Weighting formulat from: http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3760213/
 
+## Updated in November 2015 to include additional case match options using an outcome variable
+
 ###########################################
 ## Wrap the case-matcher as a function
 ###########################################
-
 case.match <- function(data, id.var, case.N=2, 
                         distance="mahalanobis",
                         design.type="most similar",
                         match.case=NULL,
                         number.of.matches.to.return=1,
                         treatment.var=NULL,
+                        outcome.var=NULL,
                         leaveout.vars=NULL,
                         max.variance=FALSE,
+                        max.variance.outcome=FALSE,
                         variance.tolerance=.1,
                         max.spread=FALSE,
+                        max.spread.outcome=FALSE,
                         varweights=NULL){
        ## "design.type" can be "most similar" or "most different".
        ## "id.var" must be the name of the id variable in quotes
@@ -28,11 +32,12 @@ case.match <- function(data, id.var, case.N=2,
     ## Warns you if you have too many treatment variables specified
   if(length(treatment.var)>1){
     stop("Only one treatment variable can be specified.")}
-
+  
     ## warns you if the treatment variable is missing
   if(max(names(data)==treatment.var, na.omit=T)==F) {
       stop("Treatment variable is missing from the dataset.")}
-
+  
+  
     ## warns you if one or more of the leaveout vars isn't in the dataset
   if(class(leaveout.vars)=="character"){
     for(i in 1:length(leaveout.vars)){
@@ -45,16 +50,37 @@ case.match <- function(data, id.var, case.N=2,
   if(max.variance==T & max.spread==T){
     stop("Cannot specify max.variance==TRUE & max.spread==TRUE.  Pick one or the other.")}
 
+  ####################################################
+  ## Additional error messages
+  
+  ## Warns you if you have too many outcome variables specified
+  if(length(outcome.var)>1){
+    stop("Only one outcome variable can be specified.")}
+  
+  ## warns you if the outcome variable is missing
+  if(max(names(data)==outcome.var, na.omit=T)==F) {
+    stop("Outcome variable is missing from the dataset.")}
+  
+  if(max.variance.outcome==T & max.spread.outcome==T){
+    stop("Cannot specify max.variance.outcome==TRUE & max.spread.outcome==TRUE.  Pick one or the other.")}
 
-
-
-
-    ## setup stuff
-
-    ## pull out the unit names
-  unit.names <- as.vector(data[,which(names(data)==id.var)])
-
-    ## this first part deals with it if it is numeric
+  if(is.null(treatment.var)==T & max.variance==T){
+    stop("Cannot specify max.variance==TRUE without specifying treatment variable")}
+  
+  if(is.null(treatment.var)==T & max.spread==T){
+    stop("Cannot specify max.spread==TRUE without specifying treatment variable")}
+  
+  if(is.null(outcome.var)==T & max.variance.outcome==T){
+    stop("Cannot specify max.variance.outcome==TRUE without specifying outcome variable")}
+  
+  if(is.null(outcome.var)==T & max.spread.outcome==T){
+    stop("Cannot specify max.spread.outcome==TRUE without specifying outcome variable")}
+  
+########################################################## MF
+  #   ## setup stuff
+  
+  # Leaveout Variables
+    ## this first part deals with it if leaveout variables are numeric
   if(class(leaveout.vars)=="numeric") { 
     leaveout <- leaveout.vars
   }
@@ -66,28 +92,96 @@ case.match <- function(data, id.var, case.N=2,
     leaveout <- charmatch(leaveout.vars,names(data))
   }
 
-    ## pull out a matrix with just the variables to use for matching
-    ## if there are no variables to leave out and no treatment var
-  if(is.null(leaveout.vars)==T & is.null(treatment.var)==T){
-    X <- data[,-which(names(data)==id.var)]}
-    ## if there are vars to leave out but no treatment var
-  if(is.null(leaveout.vars)==F & is.null(treatment.var)==T){
-    X <- data[,-c(which(names(data)==id.var), leaveout)]}
-    ## if there are no vars to leave out but one treatment var
-  if(is.null(leaveout.vars)==T & is.null(treatment.var)==F){
-    X <- data[,-c(which(names(data)==id.var), 
-                  which(names(data)==treatment.var))]
-    treat <- data[,which(names(data)==treatment.var)]
+  ## Doesn't deal with missing data well, so take out the NAs  
+  
+  ## Only keep observations that are complete (information for matching, treatment, etc.)
+  if(is.null(leaveout.vars)==F ){
+    
+    # Print message if there are missing variables
+    if(ifelse(sum(as.numeric(is.na(data[,-c(leaveout)])))>0, TRUE, FALSE)==TRUE){
+      print ("Some observations are missing data on the specified variables.  These observations have been removed.")
+    }
+    
+    missing<-as.vector(row.names(na.omit(data[,-c(leaveout)])))
+    data<-data[which(rownames(data) %in% missing),]
   }
-    ## if there are vars to leave out and one treatment var
-  if(is.null(leaveout.vars)==F & is.null(treatment.var)==F){
+  
+  if(is.null(leaveout.vars)==T ){
+    
+    # Print message if there are missing variables
+    if(ifelse(sum(as.numeric(is.na(data)))>0, TRUE, FALSE)==TRUE){
+      print ("Some observations are missing data on the specified variables.  These observations have been removed.")
+    }
+    
+  missing<-as.vector(row.names(na.omit(data)))
+  data<-data[which(rownames(data) %in% missing),]
+  
+  }
+  
+  ## pull out the unit names
+  unit.names <- as.vector(data[,which(names(data)==id.var)])
+  
+  ## pull out a matrix with just the variables to use for matching
+    ## if there are no variables to leave out and no treatment or outcome var
+  if(is.null(leaveout.vars)==T & is.null(treatment.var)==T & is.null(outcome.var)==T){
+    X <- data[,-which(names(data)==id.var)]
+    }
+   
+   ## if there are vars to leave out but no treatment or outcome var
+  if(is.null(leaveout.vars)==F & is.null(treatment.var)==T & is.null(outcome.var)==T){
+    X <- data[,-c(which(names(data)==id.var), leaveout)]
+    }
+  
+  ## if there are vars to leave out and one treatment var 
+  if(is.null(leaveout.vars)==F & is.null(treatment.var)==F & is.null(outcome.var)==T){
     X <- data[,-c(which(names(data)==id.var),
                   leaveout,
                   which(names(data)==treatment.var))]
     treat <- data[,which(names(data)==treatment.var)]
-  }
-
-  ## make sure the variable weights match the dim of X
+    }
+    
+  ## if there are no vars to leave out but one treatment var
+  if(is.null(leaveout.vars)==T & is.null(treatment.var)==F & is.null(outcome.var)==T){
+    X <- data[,-c(which(names(data)==id.var), 
+                  which(names(data)==treatment.var))]
+        treat <- data[,which(names(data)==treatment.var)]
+        }
+  
+    ## if there are no vars to leave out but one outcome var
+    if(is.null(leaveout.vars)==T & is.null(treatment.var)==T & is.null(outcome.var)==F){
+      X <- data[,-c(which(names(data)==id.var), 
+                    which(names(data)==outcome.var))]
+      outcome <- data[,which(names(data)==outcome.var)]
+      
+    }
+  
+    ## if there are no vars to leave out but one treatment var and outcome var
+      if(is.null(leaveout.vars)==T & is.null(treatment.var)==F & is.null(outcome.var)==F){
+        X <- data[,-c(which(names(data)==id.var), 
+                      which(names(data)==treatment.var),
+                      which(names(data)==outcome.var))]
+        treat <- data[,which(names(data)==treatment.var)]
+        outcome <- data[,which(names(data)==outcome.var)]
+        }
+  
+  ## if there are vars to leave out and one outcome var
+  if(is.null(leaveout.vars)==F & is.null(treatment.var)==T & is.null(outcome.var)==F){
+    X <- data[,-c(which(names(data)==id.var), 
+                  leaveout,
+                  which(names(data)==outcome.var))]
+    outcome <- data[,which(names(data)==outcome.var)]
+    }
+    ## if there are vars to leave out and one treatment var and one outcome var
+  if(is.null(leaveout.vars)==F & is.null(treatment.var)==F & is.null(outcome.var)==F){
+    X <- data[,-c(which(names(data)==id.var),
+                  leaveout,
+                  which(names(data)==treatment.var),
+                  which(names(data)==outcome.var))]
+    treat <- data[,which(names(data)==treatment.var)]
+    outcome <- data[,which(names(data)==outcome.var)]
+    }
+  
+      ## make sure the variable weights match the dim of X
   if(!is.null(varweights)){
     if(length(varweights) != ncol(X)){stop("Number of variable weights does not match number of variables.")}
   }
@@ -100,8 +194,9 @@ case.match <- function(data, id.var, case.N=2,
   
 
     ## Sets N as the overall number of observations
+  # N <- nrow(data)
   N <- nrow(data)
-    ## creates a new id variable to use throughout the algorith
+    ## creates a new id variable to use throughout the algorithm
   id <- seq(1,N,1)
     ## create the covariance matrix of the whole data for later
   if(distance=="mahalanobis") {covX <- cov(X)}
@@ -121,6 +216,7 @@ case.match <- function(data, id.var, case.N=2,
     print(paste("There are", choose((N-1), (case.N-1)), "possible case combinations"))
   }
 
+ 
     ## set the memory to the maximum allowed to allow space for the permutations
   #max.mem <- round(memory.limit(), 2)
   #memory.limit(max.mem)
@@ -128,12 +224,20 @@ case.match <- function(data, id.var, case.N=2,
 
     ## if there is a specific case to match:
   if(is.null(match.case)==F) { 
+    
       ## Issue a warning if the name of the unit to match doesn't exist
     if(length(grep(match.case,unit.names, fixed=T))==0) {
       stop("match.case does not match any of the unit IDs", call. = FALSE) }
+    
       ## This pulls out the id of the unit to match
-    match.case.id <- id[grep(match.case,unit.names, fixed=T)]
-      ## make a new id var that has the unit to match having id=1
+    # match.case.id <- id[grep(match.case,unit.names, fixed=T)]
+    match.case.id <- id[unit.names==match.case]
+    
+    ## Issue a warning if the there are too many units to match 
+    if(length(match.case.id)>1) {
+      stop("match.case matches more than one unit ID", call. = FALSE) }
+    
+    ## make a new id var that has the unit to match having id=1
     id2 <- rep(NA,length(id))
     id2[id==match.case.id] <- 1
     id2[id!=match.case.id] <- seq(2,N,1)
@@ -144,26 +248,41 @@ case.match <- function(data, id.var, case.N=2,
       ## reorder the unit names and the id and treat variables as well
     unit.names <- unit.names[order(id)]
     if(is.null(treatment.var)==F){treat <- treat[order(id)]}
+    if(is.null(outcome.var)==F){outcome <- outcome[order(id)]}
     id <- sort(id)
-  
-      ## If there is no treat var, I do all the possible combinations:
-    if(is.null(treatment.var)==T){
-        ## combn() lists all possible combinations
-        ## each column is a combination
-        ## a different set of combinations -- only those that include the match.case
+    
+    
+    ## If there is no treat or outcome var, I do all the possible combinations:
+    if(is.null(treatment.var)==T & is.null(outcome.var)==T){
+      ## combn() lists all possible combinations
+      ## each column is a combination
+      ## a different set of combinations -- only those that include the match.case
       combin <- t(combn(id[-match.case.id],(case.N-1)))
       combinations <- cbind(rep(match.case.id,nrow(combin)), combin)
     }
     ## If there is a treat var, I do only the combinations of the other treatments:
     if(is.null(treatment.var)==F){
-        ## a different set of combinations -- only those that include the match.case
-        ## using only the units with different treatments
+      ## a different set of combinations -- only those that include the match.case
+      ## using only the units with different treatments
+      print ("Matching only on units that have a different treatment value")
       treat.value <- treat[id==match.case.id]
       combin <- t(combn(id[-unique(c(match.case.id,which(treat==treat.value)))],(case.N-1)))  ## note, I already took out 
       combinations <- cbind(rep(match.case.id,nrow(combin)), combin)
     }
+    
+    ## If there is a outcome variance specified, I do only the combinations of the other outcomes:
+    if(is.null(outcome.var)==F){
+       ## a different set of combinations -- only those that include the match.case
+       ## using only the units with different outcomes
+       print ("Matching only on units that have a different outcome value")
+       outcome.value <- outcome[id==match.case.id]
+       combin <- t(combn(id[-unique(c(match.case.id,which(outcome==outcome.value)))],(case.N-1)))  ## note, I already took out 
+       combinations <- cbind(rep(match.case.id,nrow(combin)), combin)
+     }
   }
 
+  # End of if command for match.case
+  
      ## If there isn't a case to match, then do this:
   if(is.null(match.case)==T) { 
     combinations <- t(combn(id,case.N))
@@ -259,17 +378,16 @@ case.match <- function(data, id.var, case.N=2,
   for(i in 1:case.N){
     distances <- cbind(distances, unit.names[combinations[,i]])
   }
-
-    ## Sort by the overall distance
+  ## Sort by the overall distance
   distances.sort <- distances[order(distances[,1]),]
-  colnames(distances.sort) <- c("distances", rep("unit id",case.N))
+  # colnames(distances.sort) <- c("distances", rep("unit id",case.N))
+  colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
   
     ## sort holder2 by the overall distance
   holder2.sort <- data.frame(holder2[order(distances[,1]),])
   colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
 
-
-
+  
     ## THIS SECTION MAXIMIZES THE VARIANCE ON THE TREAT VAR
     ## Note that maximizing the variance IS NOT always what we want
     ## var(c(1,1,4,4)) > var(c(1,2,3,4))
@@ -278,11 +396,12 @@ case.match <- function(data, id.var, case.N=2,
     ##   and create a vector of the variances of the variable
   if(max.variance==TRUE){
     variances <- rep(NA,nrow(distances.sort))
+  
     for(i in 1:nrow(distances.sort)){
       current.row <- distances.sort[i,]
         ## I think I can just pull out these rows because I havent' reshuffled the data
       units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
-      values.to.check.variance <- data[units.matched, colnames(data)==treatment.var]
+      values.to.check.variance<- data[units.matched, colnames(data)==treatment.var]
       variances[i] <- var(values.to.check.variance)
     }
   }
@@ -300,13 +419,12 @@ case.match <- function(data, id.var, case.N=2,
     if(length(variances[variances==max(variances,na.rm=T)]) < number.of.matches.to.return){
       variances >= quantile(variances,probs=variance.tolerance)
       distances.sort.trim <- distances.sort[variances >= quantile(variances,probs=(1-variance.tolerance)),]
-      treat.variance <- variances[variances >= quantile(variances,probs=(1-variance.tolerance))]
+      treat.variance <- variances[variances >= quantile(variances,probs=variance.tolerance)]
     }
     distances.sort <- cbind(distances.sort.trim,treat.variance)
   }
 
-
-
+  
     ## THIS SECTION MAXIMIZES THE SPREAD ON THE TREAT VAR
     ## Note that maximizing the variance IS NOT always what we want
     ## we want c(1,2,3,4)) instead of c(1,1,4,4)
@@ -333,6 +451,7 @@ case.match <- function(data, id.var, case.N=2,
         ## I think I can just pull out these rows because I haven't reshuffled the data
       units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
       values.to.check.spread <- sort(data[units.matched, colnames(data)==treatment.var])
+      # colnames(values.to.check.spread) <- c(paste(rep("treatment unit",case.N),1:case.N))
         ## calculates the difference between order elements of the vector using spreadem()
       spread[i] <- spreadem(values.to.check.spread)
     }
@@ -357,9 +476,95 @@ case.match <- function(data, id.var, case.N=2,
   }
 
 
+################################################################################ MF
+  ## Maximize variance for outcome variable
+  
+  if(max.variance.outcome==TRUE){
+    variances <- rep(NA,nrow(distances.sort))
+    
+    
+    for(i in 1:nrow(distances.sort)){
+      current.row <- distances.sort[i,]
+      ## I think I can just pull out these rows because I havent' reshuffled the data
+      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
+      values.to.check.variance <- data[units.matched, colnames(data)==outcome.var]
+      variances[i] <- var(values.to.check.variance)
+    }
+  }
+  
+  ## trims the holders by the variances
+  if(max.variance.outcome==TRUE){
+    ## If there are enough matches that have the highest possible variance
+    ##  I just drop all the matches that don't have the max variance
+    if(length(variances[variances==max(variances,na.rm=T)]) > number.of.matches.to.return){
+      distances.sort.trim <- distances.sort[variances==max(variances,na.rm=T),]
+      outcome.variance <- variances[variances==max(variances,na.rm=T)]
+    }
+    ## If there are too few matches that have the maximum variance,
+    ##  I take the top "variance.tolerance" proportion of the observations
+    if(length(variances[variances==max(variances,na.rm=T)]) < number.of.matches.to.return){
+      variances >= quantile(variances,probs=variance.tolerance)
+      distances.sort.trim <- distances.sort[variances >= quantile(variances,probs=(1-variance.tolerance)),]
+      outcome.variance <- variances[variances >= quantile(variances,probs=(1-variance.tolerance))]
+    }
+    distances.sort <- cbind(distances.sort.trim,outcome.variance)
+  }
+  
+  
+  
+  
+  ## THIS SECTION MAXIMIZES THE SPREAD ON THE OUTCOME VAR
+  ## Note that maximizing the variance IS NOT always what we want
+  ## we want c(1,2,3,4)) instead of c(1,1,4,4)
+  
+  ## If max.spread.outcome=T, pull out the outcome variable 
+  ##   and create a vector of the variances of the variable
+  if(max.spread.outcome==TRUE){
+    
+    ## This is a function that calculates the overall spread
+    ##   of a vector -- the sum of the distances between the ordered components
+    spreadem <- function(vec, overall.min=min(vec), overall.max=min(vec)){
+      vec <- sort(vec)
+      spread.dist <- c()
+      for(k in 1:(length(vec)-1)){
+        spread.dist <- c(spread.dist, vec[k+1]-vec[k])
+      }
+      return(sum(spread.dist))
+    }
+    
+    
+    ## Then create a holder for the spreads
+    spread <- rep(NA,nrow(distances.sort))
+    for(i in 1:nrow(distances.sort)){
+      current.row <- distances.sort[i,]
+      ## I think I can just pull out these rows because I haven't reshuffled the data
+      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
+      values.to.check.spread <- sort(data[units.matched, colnames(data)==outcome.var])
+      ## calculates the difference between order elements of the vector using spreadem()
+      spread[i] <- spreadem(values.to.check.spread)
+    }
+  }
+  
+  ## trims the holders by the spreads
+  if(max.spread.outcome==TRUE){
+    ## If there are enough matches that have the highest possible spread
+    ##  I just drop all the matches that don't have the minimum difference
+    ##  from the ideal spread
+    if(length(spread[spread==max(spread,na.rm=T)]) > number.of.matches.to.return){
+      distances.sort.trim <- distances.sort[spread==max(spread,na.rm=T),]
+      outcome.spread <- spread[spread==max(spread,na.rm=T)]
+    }
+    ## If there are too few matches that have the maximum variance,
+    ##  I take the top "variance.tolerance" proportion of the observations
+    if(length(spread[spread==max(spread,na.rm=T)]) < number.of.matches.to.return){
+      distances.sort.trim <- distances.sort[spread >= quantile(spread,probs=(1-variance.tolerance)),]
+      outcome.spread <- spread[spread >= quantile(spread,probs=(1-variance.tolerance))]
+    }
+    distances.sort <- cbind(distances.sort.trim,outcome.spread)
+  }
+  
 
-
-
+###################################################################################
 
     ## PUT THE FINAL TABLE TOGETHER
     ## Do different things if it is "most similar" or "most different"
@@ -371,9 +576,12 @@ case.match <- function(data, id.var, case.N=2,
       ## put together a list with the distances between each pair in the matched set
       ## Have to do something different with case.N=2 
     if(case.N>=3) {
+      holder2.sort<-holder2.sort[which(rownames(holder2.sort) %in% rownames(distances.sort)),]
       match.dist <- holder2.sort[1:number.of.matches.to.return,]
+      # match.dist <- data.frame(as.matrix(distances.sort[1:number.of.matches.to.return, 1]))
       } else {
-      match.dist <- data.frame(as.matrix(holder2.sort[1:number.of.matches.to.return,]))
+       # match.dist <- data.frame(as.matrix(holder2.sort[1:number.of.matches.to.return,]))
+      match.dist <- data.frame(as.matrix(distances.sort[1:number.of.matches.to.return, 1]))
       colnames(match.dist) <- colnames(holder2.sort)
     }
     match.units <- matches[,-1]
@@ -382,9 +590,12 @@ case.match <- function(data, id.var, case.N=2,
       case.distances[[i]] <- data.frame(match.dist[i,])
       colnames(case.distances[[i]])<- paste(as.matrix(match.units[i,pairings[,1]]),"-",as.matrix(match.units[i,pairings[,2]]), sep="")
     }
+    print(head(matches[1:number.of.matches.to.return, 1: as.numeric(case.N+1)]))
     return(list("cases"=matches, "case.distances"=case.distances))
+     
   }
 
+  
     ## most different
   if(design.type=="most different"){
       ## the object with the most different matches
@@ -393,9 +604,12 @@ case.match <- function(data, id.var, case.N=2,
       ## put together a list with the distances between each pair in the matched set 
       ## Need to do something special for case.N=2
     if(case.N>=3) {
+      holder2.sort<-holder2.sort[which(rownames(holder2.sort) %in% rownames(distances.sort)),]
       match.dist <- holder2.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1),]
+      # match.dist <- distances.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1),1]
       } else {
-      match.dist <- data.frame(as.matrix(holder2.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1),]))
+      # match.dist <- data.frame(as.matrix(holder2.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1),]))
+      match.dist <- data.frame(as.matrix(distances.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1), 1]))
       colnames(match.dist) <- colnames(holder2.sort)
     }
     match.units <- matches[,-1]
@@ -404,10 +618,14 @@ case.match <- function(data, id.var, case.N=2,
       case.distances[[i]] <- data.frame(match.dist[i,])
       colnames(case.distances[[i]])<- paste(as.matrix(match.units[i,pairings[,1]]),"-",as.matrix(match.units[i,pairings[,2]]), sep="")
     }
+    print(head(matches[1:number.of.matches.to.return, 1: as.numeric(case.N+1)]))
     return(list("cases"=matches, "case.distances"=case.distances))
   }
 
 
+  # Missing data message
+  
+  # print(Some observations are missing data on the specified variables.  These observations have been removed.)
 
 
 }   ## END OF FUNCTION
