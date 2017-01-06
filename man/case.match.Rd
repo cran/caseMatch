@@ -7,11 +7,11 @@ Uses matching methods to select cases for qualitative analysis
 \usage{
 case.match(data, id.var, case.N = 2, distance = "mahalanobis", 
     design.type = "most similar", match.case = NULL, 
-    number.of.matches.to.return = 1, treatment.var = NULL,
-    outcome.var= NULL, leaveout.vars = NULL, 
+    greedy.match="pareto", number.of.matches.to.return = 1, 
+    treatment.var = NULL, outcome.var= NULL, leaveout.vars = NULL, 
     max.variance = FALSE,  max.variance.outcome=FALSE,
     variance.tolerance = 0.1, max.spread = FALSE, 
-     max.spread.outcome=FALSE, varweights = NULL)
+    max.spread.outcome=FALSE, varweights = NULL)
 }
 \arguments{
   \item{data}{The original data.}
@@ -21,6 +21,7 @@ case.match(data, id.var, case.N = 2, distance = "mahalanobis",
   \item{design.type}{Should the algorithm pick cases that are most similar or most different?  Specify either "most similar" or "most different" as a string.}
   \item{match.case}{If specified, this is the value of \code{id.var} of a specific case to match.}
   \item{number.of.matches.to.return}{How many matches to return.}
+  \item{greedy.match}{Specifies which matches to return. Options are "pareto", "greedy", and "all". "all" keeps all matches. "pareto" matches eliminate 'redundant' matches where both units have better available matches. "greedy" matches keeps only the top matches in the data, but does eliminates best matches for some units since it uses a without replacement algorithm.}
   \item{treatment.var}{The name of the treatment variable, specified as a string.}
   \item{outcome.var}{The name of the outcome variable, specified as a string.}
   \item{leaveout.vars}{A vector of variables to not include in the matching.}

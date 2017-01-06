@@ -5,6 +5,7 @@ case.match <- function(data, ## the data set
                         distance="mahalanobis", ## the distance metric to use: "mahalanobis", "euclidean", or "standardized"
                         design.type="most similar", ## specify "most similar" or "most different"
                         match.case=NULL, ## the id of a specific case to be matched
+                        greedy.match="pareto", ## what matches to report: "pareto", "all", "greedy"
                         number.of.matches.to.return=1, ## how many possible pairings should the function return?
                         treatment.var=NULL, ## the name of the treatment variable, if any
                         outcome.var=NULL, ## the name of the outcome variable, if any
@@ -61,6 +62,8 @@ case.match <- function(data, ## the data set
   ## warns about is.null(outcome.var)==T & max.spread.outcome==T
   if(is.null(outcome.var)==T & max.spread.outcome==T){
     stop("Cannot specify max.spread.outcome==TRUE without specifying outcome variable")}
+  if(design.type !="most similar" & design.type !="most different"){
+    stop("Design type is not correctly specified")}
   
   ## Preliminary data manipulation
 
@@ -512,6 +515,126 @@ case.match <- function(data, ## the data set
     distances.sort <- cbind(distances.sort.trim,outcome.spread)
   }
 
+  # Added 09/2016
+  # Options to get unique matches only  
+  # Start with pareto matches
+  # Most similar
+  
+  if(greedy.match=="pareto" & design.type=="most similar" & is.null(match.case)==T & case.N<3){
+    
+    # take out matches where both units have a better match
+    sub_matches<-c()
+    for (i in 1:length(data[,which(names(data)==id.var)])){
+      sub_matches[i]=min(distances.sort[distances.sort[,c(2)]==data[,which(names(data)==id.var)][i] | distances.sort[,c(3)]==data[,which(names(data)==id.var)][i],1]) 
+    }
+    
+    is.na(sub_matches) <- do.call(cbind,lapply(sub_matches, is.infinite))
+    sub_matches<-na.omit(sub_matches)
+    sub_matches<-sort(unique(sub_matches))
+    test_final=distances.sort[distances.sort[,1] %in% sub_matches,]
+    
+    if(nrow(test_final) > number.of.matches.to.return){
+      distances.sort=test_final  
+    }
+    ## If there are too few matches 
+    if(nrow(test_final) < number.of.matches.to.return){
+      print("For more matches, change greedy.match to 'all'")
+      distances.sort <- na.omit(test_final)
+    }
+  }
+
+  # Most different
+  
+  if(greedy.match=="pareto" & design.type=="most different" & is.null(match.case)==T){
+    distances.sort2<-distances.sort[order(-distances.sort[,1]),]
+    sub_matches<-c()
+    for (i in 1:length(data[,which(names(data)==id.var)])){
+      sub_matches[i]=max(distances.sort2[distances.sort2[,c(2)]==data[,which(names(data)==id.var)][i] | distances.sort2[,c(3)]==data[,which(names(data)==id.var)][i],1]) 
+    }
+    
+    is.na(sub_matches) <- do.call(cbind,lapply(sub_matches, is.infinite))
+    sub_matches<-na.omit(sub_matches)
+    sub_matches<-sort(unique(sub_matches))
+    test_final=distances.sort[distances.sort[,1] %in% sub_matches,]
+    
+    if(nrow(test_final) > number.of.matches.to.return){
+      distances.sort=test_final  
+    }
+    ## If there are too few matches 
+    if(nrow(test_final) < number.of.matches.to.return){
+      print("For more matches, change greedy.match to 'all'")
+      distances.sort <- test_final
+    }
+  }
+  
+  # Greedy matches
+  
+  if(greedy.match=="greedy" & design.type=="most similar" &is.null(match.case)==T){
+    # Create Matrix of distances
+    distance.temp<-distances.sort[,c(2,3)]
+    m <- matrix(unlist(distance.temp), ncol=ncol(distance.temp))
+    
+    for (i in 1:length(data[,which(names(data)==id.var)])){
+    
+      caserows=which(m==data[,which(names(data)==id.var)][i], arr.ind=TRUE)
+      caserows2<-caserows[order(caserows[,1])]
+      row.keep=caserows2[-1]
+      row.keep2<-na.omit(row.keep)
+      if (length(row.keep2)>0){
+        m=m[-row.keep2,]
+      }
+    }
+    test_final2=distances.sort[distances.sort[,2] %in% m[,1],]
+    
+    test_final3<-test_final2[match(unique(test_final2[,2]), test_final2[,2]),]
+    
+    if(nrow(test_final3) > number.of.matches.to.return){
+      distances.sort=test_final3  
+    }
+    ## If there are too few matches 
+    if(nrow(test_final3) < number.of.matches.to.return){
+      print("For more matches, change greedy.match to 'pareto' or 'all'")
+      distances.sort <- na.omit(test_final3)
+    }
+  }
+  
+  # Most different
+  
+  if(greedy.match=="greedy" & design.type=="most different" & is.null(match.case)==T){
+    distance.temp<-distances.sort[,c(2,3)][order(-distances.sort[,1]),]
+    
+    distance.matrix <- matrix(unlist(distance.temp), ncol=ncol(distance.temp))
+    
+    for (i in 1:length(data[,which(names(data)==id.var)])){
+      caserows=which(distance.matrix==data[,which(names(data)==id.var)][i], arr.ind=TRUE)
+      caserows2<-caserows[order(caserows[,1])]
+      row.keep=caserows2[-1]
+      row.keep2<-na.omit(row.keep)
+      if (length(row.keep2)>0){
+        distance.matrix=distance.matrix[-row.keep2,]
+      }
+    }
+    test_final2=distances.sort[distances.sort[,2] %in% m[,1],]    
+    test_final2<-test_final2[order(-test_final2[,1]),]
+    test_final3<-test_final2[match(unique(test_final2[,2]), test_final2[,2]),]
+    test_final3<-test_final3[order(test_final3[,1]),]
+  
+      if(nrow(test_final3) > number.of.matches.to.return){
+      distances.sort=test_final3  
+    }
+    ## If there are too few matches 
+    if(nrow(test_final3) < number.of.matches.to.return){
+      print("For more matches, change greedy.match to 'pareto' or 'all'")
+      distances.sort <- test_final3
+    }
+  }
+  
+  if(greedy.match=="all"){
+    distances.sort=distances.sort
+  }
+  
+  
+  
   ## Gather the results
   ## Do different things if it is "most similar" or "most different"
   ## Most similar
@@ -541,6 +664,11 @@ case.match <- function(data, ## the data set
   ## most different
   if(design.type=="most different"){
     ## the object with the most different matches
+    if(number.of.matches.to.return>nrow(distances.sort)){
+      print("To produce more matches, change the matching specification")
+      number.of.matches.to.return=nrow(distances.sort)
+      }
+    
     matches <- distances.sort[nrow(distances.sort):(nrow(distances.sort)-number.of.matches.to.return + 1),]
     rownames(matches) <- rev(seq((nrow(distances.sort)-number.of.matches.to.return + 1),nrow(distances.sort),1))
     ## put together a list with the distances between each pair in the matched set 
