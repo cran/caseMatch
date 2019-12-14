@@ -185,7 +185,7 @@ case.match <- function(data, ## the data set
   if(exists("covX")==F) {
     stop("Matching distance not specified properly. Check spelling")}
   ## Check if matrix can be inverted
-  f <- function(m) class(try(solve(m),silent=T))=="matrix"
+  f <- function(m){ "matrix" %in% class(try(solve(m),silent=T)) }
   if(f(covX)==F) {
     stop("Matching variables are too collinear to calculate the mahalanobis distance.  
          Either retry with euclidean distance or a different combination of matching variables.")}
