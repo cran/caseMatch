@@ -14,7 +14,7 @@ case.match(data, id.var, case.N = 2, distance = "mahalanobis",
     max.spread.outcome=FALSE, varweights = NULL)
 }
 \arguments{
-  \item{data}{The original data.}
+  \item{data}{A data frame.}
   \item{id.var}{A string variable that uniquely identifies cases within the data}
   \item{case.N}{The number of cases to choose.  Must be 1 or more.}
   \item{distance}{The distance metric, specified as a string.  Options are "mahalanobis", "euclidean", or "standardized", where "standardized" means that variables are standardized by their standard deviations.}
@@ -41,7 +41,7 @@ case.match(data, id.var, case.N = 2, distance = "mahalanobis",
   \item{case.distances}{A list of the distances between matched cases.}
 }
 \references{
-Nielsen, Richard A. Forthcoming. "Case Selection Via Matching," Sociological Methods and Research.  http://www.mit.edu/~rnielsen/Case%20Selection%20via%20Matching.pdf
+Nielsen, Richard. 2016. "Case Selection via Matching," Sociological Methods and Research, 45 (3): 569-597.  http://www.mit.edu/~rnielsen/Case%20Selection%20via%20Matching.pdf
 }
 \author{
 Rich Nielsen

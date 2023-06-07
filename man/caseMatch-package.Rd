@@ -15,7 +15,7 @@
 Maintainer: Rich Nielsen <rnielsen@mit.edu>
 }
 \references{
-Nielsen, Richard A. 2016. "Case Selection Via Matching," Sociological Methods and Research.  http://journals.sagepub.com/doi/abs/10.1177/0049124114547054
+Nielsen, Richard. 2016. "Case Selection via Matching," Sociological Methods and Research, 45 (3): 569-597.  http://journals.sagepub.com/doi/abs/10.1177/0049124114547054
 }
 % Optionally other standard keywords, one per line,
 % from the file KEYWORDS in the R documentation.

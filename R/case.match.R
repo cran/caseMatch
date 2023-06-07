@@ -17,7 +17,9 @@ case.match <- function(data, ## the data set
                         max.spread.outcome=FALSE, ## maximize "spread" on the outcome, which tries to evenly space cases
                         varweights=NULL ## Optional vector of variable weights
                         ){
-
+  
+  ## Make sure data is coming in as a data frame, not a tibble (in response to a bug-fix request)
+  data <- as.data.frame(data)
   ## Error messages
   if (case.N<2) {
       stop("case.N must be an integer 2 or larger", call. = FALSE) }
@@ -31,7 +33,7 @@ case.match <- function(data, ## the data set
   if(max(names(data)==treatment.var, na.omit=T)==F) {
       stop("Treatment variable is missing from the dataset.")}
   ## warns you if one or more of the leaveout vars isn't in the dataset
-  if(class(leaveout.vars)=="character"){
+  if(inherits(leaveout.vars, "character")){
     for(i in 1:length(leaveout.vars)){
       if(max(names(data)==leaveout.vars[i], na.omit=T)==F) {
         stop("At least 1 leaveout.vars variable is missing from the dataset.") 
@@ -64,15 +66,18 @@ case.match <- function(data, ## the data set
     stop("Cannot specify max.spread.outcome==TRUE without specifying outcome variable")}
   if(design.type !="most similar" & design.type !="most different"){
     stop("Design type is not correctly specified")}
+  if(greedy.match=="greedy" & design.type=="most different" & is.null(match.case)==T & case.N>2){
+    stop("Most different design with greedy matching only allows case.N = 2. Try greedy.match = 'pareto'")}
+  
   
   ## Preliminary data manipulation
 
   ## If leaveout variables are numeric...
-  if(class(leaveout.vars)=="numeric") { 
+  if(inherits(leaveout.vars,"numeric")) { 
     leaveout <- leaveout.vars
   }
   ## If leaveout vector is character, use charmatch() to find the column numbers of the user specified variable names
-  if(class(leaveout.vars)=="character"){
+  if(inherits(leaveout.vars,"character")){
     leaveout <- charmatch(leaveout.vars,names(data))
   }
   ## Print which variables are being matched
@@ -308,12 +313,12 @@ case.match <- function(data, ## the data set
     ## name the columns of the holder
     colnames(holder2)<- paste(pairings[,1],"-",pairings[,2], sep="")
 
-    ## fill holder2
-    for(k in 1:(choose(case.N,2))){
-      for(i in 1:nrow(combinations)){
-        holder2[i,k] <- holder[combinations[i,pairings[k,2]],combinations[i,pairings[k,1]]]
-      }
-    }
+    ## fill holder2 (faster thanks to solution from jblood94 here: https://stackoverflow.com/questions/76374499/can-a-for-loop-be-avoided-when-comparing-matrices)
+    holder2 <- matrix(
+      holder[matrix(combinations[,pairings[,2:1]], ncol = 2)],
+      nrow(combinations), nrow(pairings),
+      dimnames = list(NULL, paste(pairings[,1], pairings[,2], sep = "-"))
+    )
   }  ## ends if(is.null(match.case)==T)
 
   if(is.null(match.case)==F) { 
@@ -325,11 +330,11 @@ case.match <- function(data, ## the data set
     colnames(holder2)<- paste(pairings[,1],"-",pairings[,2], sep="")
 
     ## fill holder2
-    for(k in 1:ncol(holder2)){
-      for(i in 1:nrow(combinations)){
-        holder2[i,k] <- holder[combinations[i,pairings[k,2]],1]  ## column is 1 because I made the match.case.id=1
-      }
-    }
+    holder2 <- matrix(
+      holder[matrix(combinations[,pairings[,2:1]], ncol = 2)],
+      nrow(combinations), nrow(pairings),
+      dimnames = list(NULL, paste(pairings[,1], pairings[,2], sep = "-"))
+    )
   }  ## ends is.null(match.case)==F
 
   ## This sums the distances to find the overall mahalanobis distance
@@ -344,14 +349,7 @@ case.match <- function(data, ## the data set
   for(i in 1:case.N){
     distances <- cbind(distances, unit.names[combinations[,i]])
   }
-  ## Sort by the overall distance
-  distances.sort <- distances[order(distances[,1]),]
-  colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
   
-  ## sort holder2 by the overall distance
-  holder2.sort <- data.frame(holder2[order(distances[,1]),])
-  colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
-
   ## THIS SECTION MAXIMIZES THE VARIANCE ON THE TREAT VAR
   ## Note that maximizing the variance IS NOT always what we want
   ## var(c(1,1,4,4)) > var(c(1,2,3,4))
@@ -359,19 +357,19 @@ case.match <- function(data, ## the data set
   ## If max.variance=T, pull out the treatment variable 
   ##   and create a vector of the variances of the variable
   if(max.variance==TRUE){
-    variances <- rep(NA,nrow(distances.sort))
-    for(i in 1:nrow(distances.sort)){
-      current.row <- distances.sort[i,]
-      ## I think I can just pull out these rows because I havent' reshuffled the data
-      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
-      values.to.check.variance<- data[units.matched, colnames(data)==treatment.var]
-      variances[i] <- var(values.to.check.variance)
-    }
-  }  ## end if(max.variance==TRUE)
+    tvals <- apply(combinations,MARGIN=2,function(x){data[[treatment.var]][x]})
+    variances <- apply(tvals,MARGIN=1,var)
+    
+    ## Sort by the overall distance
+    distances.sort <- distances[order(distances[,1]),]
+    variances <- variances[order(distances[,1])]
+    colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
+    ## sort holder2 by the overall distance
+    holder2.sort <- data.frame(holder2[order(distances[,1]),])
+    colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
 
-  
-  ## trims the holders by the variances
-  if(max.variance==TRUE){
+    ## trims the holders by the variances
+    
     ## If there are enough matches that have the highest possible variance
     ##  I just drop all the matches that don't have the max variance
     if(length(variances[which(variances==max(variances,na.rm=T))]) > number.of.matches.to.return){
@@ -387,7 +385,7 @@ case.match <- function(data, ## the data set
     distances.sort <- cbind(distances.sort.trim,treat.variance)
   } ## end if(max.variance==TRUE)
   
-  
+
   ## THIS SECTION MAXIMIZES THE SPREAD ON THE TREAT VAR
   ## Note that maximizing the variance IS NOT always what we want
   ## we want c(1,2,3,4)) instead of c(1,1,4,4)
@@ -405,21 +403,21 @@ case.match <- function(data, ## the data set
       }
       return(sum(spread.dist))
     } ## end spreadem()
-
+    
     ## Then create a holder for the spreads
-    spread <- rep(NA,nrow(distances.sort))
-    for(i in 1:nrow(distances.sort)){
-      current.row <- distances.sort[i,]
-      ## I think I can just pull out these rows because I haven't reshuffled the data
-      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
-      values.to.check.spread <- sort(data[units.matched, colnames(data)==treatment.var])
-      ## calculates the difference between order elements of the vector using spreadem()
-      spread[i] <- spreadem(values.to.check.spread)
-    }
-  }
+    tvals <- apply(combinations,MARGIN=2,function(x){data[[treatment.var]][x]})
+    spread <- apply(tvals,MARGIN=1,spreadem)
+  
+    ## Sort by the overall distance
+    distances.sort <- distances[order(distances[,1]),]
+    spread <- spread[order(distances[,1])]
+    colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
+    ## sort holder2 by the overall distance
+    holder2.sort <- data.frame(holder2[order(distances[,1]),])
+    colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
 
-  ## trims the holders by the spreads
-  if(max.spread==TRUE){
+    ## trims the holders by the spreads
+    
     ## If there are enough matches that have the highest possible spread
     ##  I just drop all the matches that don't have the minimum difference
     ##  from the ideal spread
@@ -438,18 +436,18 @@ case.match <- function(data, ## the data set
 
   ## Maximize variance for outcome variable
   if(max.variance.outcome==TRUE){
-    variances <- rep(NA,nrow(distances.sort))
-    for(i in 1:nrow(distances.sort)){
-      current.row <- distances.sort[i,]
-      ## I think I can just pull out these rows because I havent' reshuffled the data
-      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
-      values.to.check.variance <- data[units.matched, colnames(data)==outcome.var]
-      variances[i] <- var(values.to.check.variance)
-    }
-  }
+    ovals <- apply(combinations,MARGIN=2,function(x){data[[outcome.var]][x]})
+    variances <- apply(ovals,MARGIN=1,var)
+    
+    ## Sort by the overall distance
+    distances.sort <- distances[order(distances[,1]),]
+    variances <- variances[order(distances[,1])]
+    colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
+    ## sort holder2 by the overall distance
+    holder2.sort <- data.frame(holder2[order(distances[,1]),])
+    colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
   
-  ## trims the holders by the variances
-  if(max.variance.outcome==TRUE){
+    ## trims the holders by the variances
     ## If there are enough matches that have the highest possible variance
     ##  I just drop all the matches that don't have the max variance
     if(length(variances[which(variances==max(variances,na.rm=T))]) > number.of.matches.to.return){
@@ -486,19 +484,18 @@ case.match <- function(data, ## the data set
     } 
     
     ## Then create a holder for the spreads
-    spread <- rep(NA,nrow(distances.sort))
-    for(i in 1:nrow(distances.sort)){
-      current.row <- distances.sort[i,]
-      ## I think I can just pull out these rows because I haven't reshuffled the data
-      units.matched <- unlist(apply(current.row, MARGIN=2, FUN=function(x){which(unit.names==x)}))
-      values.to.check.spread <- sort(data[units.matched, colnames(data)==outcome.var])
-      ## calculates the difference between order elements of the vector using spreadem()
-      spread[i] <- spreadem(values.to.check.spread)
-    }
-  }
-  
-  ## trims the holders by the spreads
-  if(max.spread.outcome==TRUE){
+    ovals <- apply(combinations,MARGIN=2,function(x){data[[outcome.var]][x]})
+    spread <- apply(ovals,MARGIN=1,spreadem)
+    
+    ## Sort by the overall distance
+    distances.sort <- distances[order(distances[,1]),]
+    spread <- spread[order(distances[,1])]
+    colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
+    ## sort holder2 by the overall distance
+    holder2.sort <- data.frame(holder2[order(distances[,1]),])
+    colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
+    
+    ## trims the holders by the spreads
     ## If there are enough matches that have the highest possible spread
     ##  I just drop all the matches that don't have the minimum difference
     ##  from the ideal spread
@@ -519,6 +516,15 @@ case.match <- function(data, ## the data set
   # Options to get unique matches only  
   # Start with pareto matches
   # Most similar
+  
+  if(!exists("distances.sort")){
+    ## Sort by the overall distance
+    distances.sort <- distances[order(distances[,1]),]
+    colnames(distances.sort) <- c("distances", paste(rep("unit id",case.N),1:case.N))
+    ## sort holder2 by the overall distance
+    holder2.sort <- data.frame(holder2[order(distances[,1]),])
+    colnames(holder2.sort)<- paste(pairings[,1],"-",pairings[,2], sep="")
+  }
   
   if(greedy.match=="pareto" & design.type=="most similar" & is.null(match.case)==T & case.N<3){
     
@@ -549,9 +555,16 @@ case.match <- function(data, ## the data set
     distances.sort2<-distances.sort[order(-distances.sort[,1]),]
     sub_matches<-c()
     for (i in 1:length(data[,which(names(data)==id.var)])){
-      sub_matches[i]=max(distances.sort2[distances.sort2[,c(2)]==data[,which(names(data)==id.var)][i] | distances.sort2[,c(3)]==data[,which(names(data)==id.var)][i],1]) 
+      # Original line that I think has a mistake because it assumes only case.N=2
+      #sub_matches[i]=max(distances.sort2[distances.sort2[,c(2)]==data[,which(names(data)==id.var)][i] | distances.sort2[,c(3)]==data[,which(names(data)==id.var)][i],1]) 
+      # A fixed version that mirrors the original code for case.N=3
+      #sub_matches[i]=max(distances.sort2[distances.sort2[,c(2)]==data[,which(names(data)==id.var)][i] | distances.sort2[,c(3)]==data[,which(names(data)==id.var)][i] | distances.sort2[,c(4)]==data[,which(names(data)==id.var)][i],1]) 
+      ## A fixed version that's more flexible
+      idx <- data[,which(names(data)==id.var)][i]
+      sub_matches[i]=max(distances.sort2[rowSums(apply(distances.sort2[,2:(2+case.N-1)],MARGIN=2,FUN=function(x){x==idx}))>0, 1])
     }
-    
+    tmp <- sub_matches
+    sub_matches==tmp
     is.na(sub_matches) <- do.call(cbind,lapply(sub_matches, is.infinite))
     sub_matches<-na.omit(sub_matches)
     sub_matches<-sort(unique(sub_matches))
@@ -602,10 +615,10 @@ case.match <- function(data, ## the data set
   
   if(greedy.match=="greedy" & design.type=="most different" & is.null(match.case)==T){
     distance.temp<-distances.sort[,c(2,3)][order(-distances.sort[,1]),]
-    
     distance.matrix <- matrix(unlist(distance.temp), ncol=ncol(distance.temp))
     
     for (i in 1:length(data[,which(names(data)==id.var)])){
+      print(i)
       caserows=which(distance.matrix==data[,which(names(data)==id.var)][i], arr.ind=TRUE)
       caserows2<-caserows[order(caserows[,1])]
       row.keep=caserows2[-1]
